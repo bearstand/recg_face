@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 from PIL import Image
 import pickle
+import os
 
 def remove_small_faces( face_locations ):
     l=len(face_locations)
@@ -54,11 +55,18 @@ def save_image( image, filename ):
     Image.fromarray(image).save("pictures/"+filename+".jpg")
     return
 
+def init_dir(directory):
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+        
 def load_data():
-    with open('data.pkl', 'rb') as input:
-        encodings = pickle.load(input)
-        names = pickle.load(input)
-    return encodings, names
+    try:
+        with open('data.pkl', 'rb') as input:
+            encodings = pickle.load(input)
+            names = pickle.load(input)
+        return encodings, names
+    except FileNotFoundError:
+        return [],[]
 
 def save_data( encodings, names ):
     with open('data.pkl', 'wb') as output:
@@ -87,6 +95,7 @@ def get_better_face_encoding( frame, location):
 # OpenCV is *not* required to use the face_recognition library. It's only required if you want to run this
 # specific demo. If you have trouble installing it, try any of the other demos that don't require it instead.
 
+init_dir("pictures")
 # Get a reference to webcam #0 (the default one)
 video_capture = cv2.VideoCapture(0)
 
@@ -94,7 +103,7 @@ video_capture = cv2.VideoCapture(0)
 known_face_encodings = []
 known_face_names = []
 
-#known_face_encodings, known_face_names = load_data( )
+known_face_encodings, known_face_names = load_data( )
 
 # Initialize some variables
 face_locations = []
