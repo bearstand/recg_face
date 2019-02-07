@@ -6,18 +6,83 @@ from PIL import Image
 import pickle
 import os
 
+
+def middle_point(loc ):
+    (t, r, b, l) = loc
+    return ( (t+b)/2, (r+l)/2)
+
+def distance_of_points( p1, p2 ):
+    (x1,y1) = p1
+    (x2,y2) = p2
+    print("distance:", (x1-x2)**2 + (y1-y2)**2 )
+    return ( (x1-x2)**2 + (y1-y2)**2 )
+
+def distance_of_locations( loc1, loc2 ):
+    return( distance_of_points( middle_point(loc1), middle_point(loc2)))
+    
+MAX_DISTANCE=10000
+
+class UnknownFaces:
+    def __init__(self):
+        self.images=[]
+        self.locations=[]
+
+
+    def add( self, image, location ):
+        if ( len( self.locations ) == 0 
+             or distance_of_locations( location, self.locations[0] ) < MAX_DISTANCE ):
+            self.images.append(image)
+            self.locations.append(location)
+            print("new unknown face inserted:", len(self.locations))
+            return True
+        else:
+            return False
+
+    def remove( self, location ):
+        lenth=len(self.locations)
+        i=0
+        while i<lenth:
+            if ( distance_of_locations( self.locations[i], location ) < MAX_DISTANCE ): 
+                print("unknown face removed:", len(self.locations))
+                del self.locations[i]
+                del self.images[i]
+                lenth=lenth-1
+            i=i+1
+
+    def count_of_same_position(self, location ):
+        count=0
+        for l in self.locations:
+            if ( distance_of_locations( l, location ) < MAX_DISTANCE ):
+                count+=1
+        return count
+
+    def get_the_best_image():
+        av=np.average(self.images)
+        min_dist=999999
+        min_pointer=0
+        for i in len(self.images):
+            dist=np.linalg.norm(av-self.images[i])
+            if dist < min_dist:
+                min_pointer=i
+                min_dist=dist
+        return self.images[min_pointer] 
+
+    def clear():
+        self.images=[]
+        self.locations=[]
+
 def remove_small_faces( face_locations ):
     l=len(face_locations)
     i=0
     while i<l:
         (top, right, bottom, left) = face_locations[i]
-        if ( bottom-top < 50 or right-left < 50 ):
-            face_locations.remove(face_locations[i])
+        if ( bottom-top < 30 or right-left < 30 ):
+            del face_locations[i]
             l=l-1
         i+=1
     return
 
-def draw_rectangle( frame, location,name ):
+def draw_rectangle( frame, location, name ):
     (top, right, bottom, left) =location 
     # Scale back up face locations since the frame we detected in was scaled to 1/4 size
     top *= 4
@@ -29,7 +94,7 @@ def draw_rectangle( frame, location,name ):
         color=(0, 0, 255)
     else:
         color=(255, 0, 0)
-    # Draw a box around the face
+
     cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
 
     # Draw a label with a name below the face
@@ -38,13 +103,9 @@ def draw_rectangle( frame, location,name ):
     cv2.putText(frame, name, (left + 6, bottom + 29), font, 1.0, (255, 255, 255), 1)
     return
 
-def blurValue(frame, location): 
-    (top, right, bottom, left) =location 
-    image=frame[top:bottom, left:right]
-    #Image.fromarray(image).show()
+def blurValue(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     b= cv2.Laplacian(gray, cv2.CV_64F).var()
-
     return b
 
 def show_image( frame ):
@@ -73,6 +134,17 @@ def save_data( encodings, names ):
         pickle.dump(encodings, output, pickle.HIGHEST_PROTOCOL)
         pickle.dump(names, output, pickle.HIGHEST_PROTOCOL)
     return
+
+def get_face_image( frame, location):
+    (top, right, bottom, left) =location 
+    top *= 4
+    right *= 4
+    bottom *= 4
+    left *= 4
+    image=frame[top:bottom, left:right]
+    rgb_image = image[:, :, ::-1]
+    return rgb_image
+
     
 def get_better_face_encoding( frame, location):
     (top, right, bottom, left) =location 
@@ -86,22 +158,9 @@ def get_better_face_encoding( frame, location):
     encodings = face_recognition.face_encodings(rgb_frame, [new_location], num_jitters=5)
     return encodings[0], rgb_frame
 
-# This is a demo of running face recognition on live video from your webcam. It's a little more complicated than the
-# other example, but it includes some basic performance tweaks to make things run a lot faster:
-#   1. Process each video frame at 1/4 resolution (though still display it at full resolution)
-#   2. Only detect faces in every other frame of video.
-
-# PLEASE NOTE: This example requires OpenCV (the `cv2` library) to be installed only to read from your webcam.
-# OpenCV is *not* required to use the face_recognition library. It's only required if you want to run this
-# specific demo. If you have trouble installing it, try any of the other demos that don't require it instead.
-
 init_dir("pictures")
 # Get a reference to webcam #0 (the default one)
 video_capture = cv2.VideoCapture(0)
-
-# Create arrays of known face encodings and their names
-known_face_encodings = []
-known_face_names = []
 
 known_face_encodings, known_face_names = load_data( )
 
@@ -110,6 +169,7 @@ face_locations = []
 face_encodings = []
 face_names = []
 process_this_frame = True
+unknown_faces=UnknownFaces()
 
 while True:
     # Grab a single frame of video
@@ -139,19 +199,25 @@ while True:
             if True in matches:
                 first_match_index = matches.index(True)
                 name = known_face_names[first_match_index]
+                unknown_faces.remove(face_locations[f])
             else:
-                draw_rectangle( frame, face_locations[f], "unknown" )
-                cv2.imshow('Video', frame)
-                b=blurValue(rgb_small_frame, face_locations[f])
+                image=get_face_image( frame, face_locations[f]) 
+                b=blurValue(image)
                 print("blur:", b)
-                if ( b  > 1000 ):
-                    encoding, image=get_better_face_encoding( frame, face_locations[f])
-                    show_image(image)
-                    text = input("what's your name?")
-                    if ( len(text) > 0 ):
-                            known_face_encodings.append(encoding)
-                            known_face_names.append(text)
-                            save_image(image, text+"_"+str(len(known_face_encodings))) 
+                if ( b  > 10 ):
+                    if ( unknown_faces.add(image,face_locations[f]) ):
+                        if( unknown_faces.count_of_same_position(face_locations[f]) >=5 ):
+                            image2=unknown_faces.get_the_best_image()
+                            show_image(image2)
+                            encodings=face_recognition.face_encodings(image2, known_face_locations=None, num_jitters=5)
+                            text = input("what's your name?")
+                            if ( len(text) > 0 ):
+                                name=text
+                                known_face_encodings.append(encodings[0])
+                                known_face_names.append(text)
+                                save_image(image, text+"_"+str(len(known_face_encodings))) 
+                            else:
+                                name="Unknown"
 
             face_names.append(name)
 
