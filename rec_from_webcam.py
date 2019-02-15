@@ -212,10 +212,10 @@ while True:
                         text = input("what's your name?")
                         if ( len(text) > 0 ):
                             name=text
-                            encoding2 = get_better_face_encoding( image2 )
+                            #encoding2 = get_better_face_encoding( image2 )
                             filename=text+"_"+str(len(known_face_encodings))
                             save_image(image2, filename) 
-                            known_face_encodings.append(encoding2)
+                            known_face_encodings.append(encoding)
                             known_face_names.append(name)
                             known_face_files.append(filename)
                             unknown_faces.remove(face_locations[f])
