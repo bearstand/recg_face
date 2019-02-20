@@ -16,7 +16,7 @@ c.execute("create table persons ( pid integer, name text,  firstseen integer, la
 
 c.execute("drop table if exists config")
 c.execute("create table config ( imageFileId integer)")
-
+c.execute("insert into config values (0)")
 
 conn.commit()
 conn.close()
