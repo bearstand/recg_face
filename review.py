@@ -19,7 +19,7 @@ print(maxpid)
 c.execute("select * from newFaces")
 rows=c.fetchall()
 for i in rows:
-    filename="pictures/richard_"+str(i[1])+".jpg"
+    filename="pictures/"+str(i[1])+".jpg"
     Image.open(filename).show()
     
     text = input("If you want to save it give it a name:")

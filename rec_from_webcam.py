@@ -5,7 +5,12 @@ import numpy as np
 from PIL import Image
 import pickle
 import os
+import sqlite3
 
+conn = sqlite3.connect('faces.db')
+c= conn.cursor()
+c.execute("select imageFileId from config")
+max_file_id=c.fetchone()[0]
 
 def middle_point(loc ):
     (t, r, b, l) = loc
@@ -94,7 +99,7 @@ def draw_rectangle( frame, location, name ):
     bottom *= 4
     left *= 4
 
-    if ( name == "Unknown" ):
+    if ( name == "new" ):
         color=(0, 0, 255)
     else:
         color=(255, 0, 0)
@@ -125,14 +130,14 @@ def init_dir(directory):
         os.makedirs(directory)
         
 def load_data():
-    try:
-        with open('data.pkl', 'rb') as input:
-            encodings = pickle.load(input)
-            names = pickle.load(input)
-            files = pickle.load(input)
-        return encodings, names, files
-    except FileNotFoundError:
-        return [],[],[]
+    encodings=[]
+    names=[]
+    c.execute("select knownFaces.encoding, persons.name from knownFaces, persons where knownFaces.pid=persons.pid")
+    rows=c.fetchall()
+    for r in rows:
+        encodings.append(pickle.loads(r[0]))
+        names.append(r[1])
+    return encodings, names
 
 def save_data( encodings, names,files ):
     with open('data.pkl', 'wb') as output:
@@ -156,11 +161,20 @@ def get_better_face_encoding( image ):
     encodings = face_recognition.face_encodings(image, known_face_locations=None, num_jitters=5)
     return encodings[0]
 
+def save_unknown_face( image, encoding):
+        global max_file_id
+        pdata=pickle.dumps(encoding, pickle.HIGHEST_PROTOCOL)
+        max_file_id+=1
+        Image.fromarray(image).save("pictures/"+str(max_file_id)+".jpg")
+        c.execute(" insert into newFaces values ( ?, ?, strftime('%s','now'))", (sqlite3.Binary(pdata), max_file_id ))
+        c.execute("update config set imageFileId=?", ( max_file_id, ))
+        conn.commit()
+
 init_dir("pictures")
 # Get a reference to webcam #0 (the default one)
 video_capture = cv2.VideoCapture(0)
 
-known_face_encodings, known_face_names, known_face_files = load_data( )
+known_face_encodings, known_face_names = load_data( )
 
 # Initialize some variables
 face_locations = []
@@ -192,7 +206,7 @@ while True:
             face_encoding = face_encodings[f]
             # See if the face is a match for the known face(s)
             matches = face_recognition.compare_faces(known_face_encodings, face_encoding, tolerance=0.4)
-            name = "Unknown"
+            name = "new"
 
             # If a match was found in known_face_encodings, just use the first one.
             if True in matches:
@@ -208,19 +222,11 @@ while True:
                     unknown_faces.add(image,face_locations[f],face_encoding )
                     if( unknown_faces.count_of_same_position(face_locations[f]) >=5 ):
                         image2, encoding=unknown_faces.get_the_best_image(face_locations[f])
-                        show_image(image2)
-                        text = input("what's your name?")
-                        if ( len(text) > 0 ):
-                            name=text
-                            #encoding2 = get_better_face_encoding( image2 )
-                            filename=text+"_"+str(len(known_face_encodings))
-                            save_image(image2, filename) 
-                            known_face_encodings.append(encoding)
-                            known_face_names.append(name)
-                            known_face_files.append(filename)
-                            unknown_faces.remove(face_locations[f])
-                        else:
-                            name="Unknown"
+                        save_unknown_face(image2, encoding) 
+                        unknown_faces.remove(face_locations[f])
+                        known_face_encodings.append(encoding)
+                        known_face_names.append(name)
+                        print("add one new face")
 
             face_names.append(name)
 
@@ -236,7 +242,8 @@ while True:
 
     # Hit 'q' on the keyboard to quit!
     if cv2.waitKey(1) & 0xFF == ord('q'):
-        save_data( known_face_encodings, known_face_names, known_face_files )
+        conn.commit()
+        conn.close()
         break
 
 # Release handle to the webcam
