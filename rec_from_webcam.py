@@ -80,16 +80,12 @@ class UnknownFaces:
         self.images=[]
         self.locations=[]
 
-def remove_small_faces( face_locations ):
-    l=len(face_locations)
-    i=0
-    while i<l:
-        (top, right, bottom, left) = face_locations[i]
-        if ( bottom-top < 30 or right-left < 30 ):
-            del face_locations[i]
-            l=l-1
-        i+=1
-    return
+def is_small( location):
+    (top, right, bottom, left) = location
+    if ( bottom-top < 30 or right-left < 30 ):
+        return True
+    else:
+        return False
 
 def draw_rectangle( frame, location, name ):
     (top, right, bottom, left) =location 
@@ -198,7 +194,7 @@ while True:
     if process_this_frame:
         # Find all the faces and face encodings in the current frame of video
         face_locations = face_recognition.face_locations(rgb_small_frame)
-        remove_small_faces( face_locations )
+        #remove_small_faces( face_locations )
         face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
 
         face_names = []
@@ -213,7 +209,7 @@ while True:
                 first_match_index = matches.index(True)
                 name = known_face_names[first_match_index]
                 unknown_faces.remove(face_locations[f])
-            else:
+            elif not is_small(face_locations[f]):
                 image=get_face_image( frame, face_locations[f]) 
                 b=blurValue(image)
                 average_blur=0.9*average_blur+0.1*b
