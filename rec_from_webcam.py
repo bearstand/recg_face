@@ -7,7 +7,7 @@ import pickle
 import os
 import sqlite3
 
-conn = sqlite3.connect('faces.db')
+conn = sqlite3.connect('.recdata/faces.db')
 c= conn.cursor()
 c.execute("select imageFileId from config")
 max_file_id=c.fetchone()[0]
@@ -117,13 +117,14 @@ def show_image( frame ):
     Image.fromarray(frame).show()
     return
 
-def save_image( image, filename ):
-    Image.fromarray(image).save("pictures/"+filename+".jpg")
-    return
-
 def init_dir(directory):
     if not os.path.exists(directory):
         os.makedirs(directory)
+
+def init_dirs():
+    init_dir(".recdata/newfaces")
+    init_dir(".recdata/knownfaces")
+
         
 def load_data():
     encodings=[]
@@ -157,16 +158,16 @@ def get_better_face_encoding( image ):
     encodings = face_recognition.face_encodings(image, known_face_locations=None, num_jitters=5)
     return encodings[0]
 
-def save_unknown_face( image, encoding):
+def save_new_faces( image, encoding):
         global max_file_id
         pdata=pickle.dumps(encoding, pickle.HIGHEST_PROTOCOL)
         max_file_id+=1
-        Image.fromarray(image).save("pictures/"+str(max_file_id)+".jpg")
+        Image.fromarray(image).save(".recdata/newfaces/"+str(max_file_id)+".jpg")
         c.execute(" insert into newFaces values ( ?, ?, strftime('%s','now'))", (sqlite3.Binary(pdata), max_file_id ))
         c.execute("update config set imageFileId=?", ( max_file_id, ))
         conn.commit()
 
-init_dir("pictures")
+init_dirs()
 # Get a reference to webcam #0 (the default one)
 video_capture = cv2.VideoCapture(0)
 
@@ -201,7 +202,7 @@ while True:
         for f in range(len(face_encodings)):
             face_encoding = face_encodings[f]
             # See if the face is a match for the known face(s)
-            matches = face_recognition.compare_faces(known_face_encodings, face_encoding, tolerance=0.4)
+            matches = face_recognition.compare_faces(known_face_encodings, face_encoding, tolerance=0.5)
             name = "new"
 
             # If a match was found in known_face_encodings, just use the first one.
@@ -218,7 +219,7 @@ while True:
                     unknown_faces.add(image,face_locations[f],face_encoding )
                     if( unknown_faces.count_of_same_position(face_locations[f]) >=5 ):
                         image2, encoding=unknown_faces.get_the_best_image(face_locations[f])
-                        save_unknown_face(image2, encoding) 
+                        save_new_face(image2, encoding) 
                         unknown_faces.remove(face_locations[f])
                         known_face_encodings.append(encoding)
                         known_face_names.append(name)
