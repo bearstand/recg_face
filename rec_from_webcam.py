@@ -238,10 +238,15 @@ while True:
     cv2.imshow('Video', frame)
 
     # Hit 'q' on the keyboard to quit!
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+    key=cv2.waitKey(1)
+    if key & 0xFF == ord('q'):
         conn.commit()
         conn.close()
         break
+    elif key & 0xFF == ord('l'):
+        print("data reloaded")
+        known_face_encodings, known_face_names = load_data()
+
 
 # Release handle to the webcam
 video_capture.release()
